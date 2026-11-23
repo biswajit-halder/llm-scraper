@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: llm-scraper API
+  version: 1.0.0
+  description: SSRF-safe URL fetching and schema-validated extraction with free OpenRouter models.
+servers:
+  - url: https://llm-scraper.bhalder.workers.dev
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, description: Scraper API key (scr_...) }
+    adminToken: { type: apiKey, in: header, name: x-admin-token }
+  schemas:
+    ScrapeRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri, example: 'https://example.com/article' }
+        schema_id: { type: string, enum: [article, product, job_posting] }
+        schema:
+          type: object
+          properties:
+            name: { type: string }
+            description: { type: string }
+            json_schema: { type: object, description: 'Strict JSON Schema object' }
+        options:
+          type: object
+          properties:
+            max_chars: { type: integer, minimum: 1000, maximum: 16000 }
+            follow_robots: { type: boolean, default: true }
+    Source:
+      type: object
+      properties:
+        url: { type: string }
+        final_url: { type: string }
+        title: { type: string, nullable: true }
+        text_chars: { type: integer }
+        truncated: { type: boolean }
+        content_hash: { type: string }
+    ScrapeResponse:
+      type: object
+      properties:
+        id: { type: string }
+        data: { type: object }
+        source: { $ref: '#/components/schemas/Source' }
+        schema:
+          type: object
+          properties: { name: { type: string }, hash: { type: string } }
+        strategy: { type: string, enum: [model, fallback] }
+        model: { type: string }
+        cached: { type: boolean }
+        calls_spent: { type: integer }
+        failures:
+          type: array
+          items:
+            type: object
+            properties: { model: { type: string }, code: { type: string } }
+        reason: { type: string }
+        quota: { type: object }
+        usage: { type: object }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, enum: [VALIDATION_ERROR, UNAUTHORIZED, RATE_LIMITED, SSRF_BLOCKED, ROBOTS_DISALLOWED, FETCH_FAILED, UNSUPPORTED_CONTENT, UPSTREAM_ERROR, NOT_FOUND, INTERNAL] }
+            message: { type: string }
+            retryable: { type: boolean }
+paths:
+  /health:
+    get: { summary: Service status and quota, responses: { '200': { description: OK } } }
+  /v1/scrape:
+    post:
+      summary: Scrape a URL into schema-shaped JSON
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScrapeRequest' }
+      responses:
+        '200': { description: Cache hit, schema: { $ref: '#/components/schemas/ScrapeResponse' } }
+        '201': { description: Scraped, schema: { $ref: '#/components/schemas/ScrapeResponse' } }
+        '400': { description: Invalid URL or schema, schema: { $ref: '#/components/schemas/Error' } }
+        '401': { description: Invalid key, schema: { $ref: '#/components/schemas/Error' } }
+        '403': { description: robots.txt disallowed, schema: { $ref: '#/components/schemas/Error' } }
+        '415': { description: Unsupported content, schema: { $ref: '#/components/schemas/Error' } }
+        '429': { description: Rate limited, schema: { $ref: '#/components/schemas/Error' } }
+        '502': { description: Fetch failed, schema: { $ref: '#/components/schemas/Error' } }
+    get:
+      summary: Recent scrapes
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: OK } }
+  /v1/scrape/{id}:
+    get:
+      summary: Fetch one stored scrape
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /v1/schemas:
+    get:
+      summary: Built-in schema catalog
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: OK } }
+  /v1/usage:
+    get:
+      summary: Aggregates and global quota
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: query, name: hours, schema: { type: integer, default: 24 } }]
+      responses: { '200': { description: OK } }
+  /v1/usage/events:
+    get:
+      summary: Recent calls
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: OK } }
+  /admin/keys:
+    post:
+      summary: Mint a key
+      security: [{ adminToken: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { label: { type: string } }
+      responses: { '200': { description: Key created }, '401': { description: Invalid admin token } }
+    get:
+      summary: List keys
+      security: [{ adminToken: [] }]
+      responses: { '200': { description: OK } }
+  /admin/keys/{id}/revoke:
+    post:
+      summary: Revoke a key
+      security: [{ adminToken: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses: { '200': { description: Revoked } }

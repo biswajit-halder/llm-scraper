@@ -1,0 +1,42 @@
+name = "llm-scraper"
+main = "src/index.ts"
+compatibility_date = "2026-11-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Create once, then paste IDs. Re-check the free roster before deploying:
+#    https://openrouter.ai/models?max_price=0
+#   D1 free tier is at its 10-database limit, so this Worker shares cmg-db.
+#   All scraper tables use the scraper_ prefix (see migrations/0002_*).
+#   npx wrangler kv namespace create SCRAPER_CACHE
+#   npm run db:migrate:local && npm run db:migrate:remote
+# ─────────────────────────────────────────────────────────────────────────────
+
+[vars]
+DEFAULT_MODELS = "inclusionai/ling-3.2-flash:free,liquid/lfm-3-1.7b:free,baidu/ernie-5.5-flash-preview:free"
+REQUEST_TIMEOUT_MS = "15000"
+FETCH_TIMEOUT_MS = "10000"
+CACHE_TTL_SECONDS = "604800"
+PAGE_CACHE_TTL_SECONDS = "3600"
+MODELS_CACHE_TTL_SECONDS = "21600"
+PER_MINUTE_LIMIT = "20"
+DAILY_REQUEST_LIMIT = "50"
+KEY_DAILY_LIMIT = "500"
+PROMPT_VERSION = "extract-v1"
+MAX_BYTES = "1048576"
+MAX_TEXT_CHARS = "16000"
+ALLOWED_HOSTS = ""
+BLOCKED_HOSTS = ""
+ALLOWED_ORIGIN = "*"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cmg-db"
+database_id = "5dbb53b4-36aa-441b-a315-25df80174ef8"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "21d2ad4c0895424f868fed1a69c74956"
+
+# Secrets (set with `wrangler secret put`):
+#   OPENROUTER_API_KEY
+#   ADMIN_TOKEN

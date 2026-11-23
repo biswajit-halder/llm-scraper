@@ -1,0 +1,28 @@
+{
+  "name": "llm-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zero-cost, SSRF-safe LLM scraper on Cloudflare Workers: fetch a URL, strip boilerplate and extract schema-validated JSON with free OpenRouter models.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply cmg-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply cmg-db --remote"
+  },
+  "dependencies": {
+    "hono": "^4.9.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261119.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.40.0"
+  }
+}
