@@ -19,7 +19,7 @@ import type { AppEnv, ScrapeRecord, ScrapeResult } from '../types';
 
 export const scrape = new Hono<AppEnv>();
 
-function publicRecord(record: ScrapeRecord, quota: unknown, usage: unknown, failures: unknown, reason?: string) {
+function publicRecord(record: ScrapeRecord, quota: unknown, usage: unknown, failures: unknown) {
   return {
     id: record.id,
     data: record.data,
@@ -32,7 +32,6 @@ function publicRecord(record: ScrapeRecord, quota: unknown, usage: unknown, fail
     failures,
     quota,
     usage,
-    ...(reason ? { reason } : {}),
   };
 }
 
@@ -112,16 +111,15 @@ scrape.post('/', auth, async (c) => {
     ...result,
     id: newId('scr'),
     api_key_id: keyId,
-    status: outcome.strategy === 'model' ? 'ok' : 'fallback',
+    status: 'ok',
     text_preview: page.text.slice(0, 240),
   };
 
   await insertScrape(c.env, record);
-  if (outcome.strategy === 'model') {
-    await putCachedExtraction(c.env, cacheKey, {
-      data: outcome.data, strategy: outcome.strategy, model: outcome.model,
-    });
-  }
+  // Only fully validated, grounded results are ever cached or persisted.
+  await putCachedExtraction(c.env, cacheKey, {
+    data: outcome.data, strategy: outcome.strategy, model: outcome.model,
+  });
   await insertUsage(c.env, {
     keyId,
     scrapeId: record.id,
@@ -130,7 +128,7 @@ scrape.post('/', auth, async (c) => {
     tokensIn: outcome.tokensIn,
     tokensOut: outcome.tokensOut,
     latencyMs: outcome.latencyMs,
-    status: outcome.strategy === 'model' ? 'ok' : 'fallback',
+    status: 'ok',
   });
 
   return c.json(
@@ -144,7 +142,6 @@ scrape.post('/', auth, async (c) => {
         latency_ms: outcome.latencyMs,
       },
       outcome.failures,
-      outcome.reason,
     ),
     201,
   );

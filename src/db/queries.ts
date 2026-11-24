@@ -172,7 +172,7 @@ export async function getScrape(env: Env, id: string): Promise<ScrapeRecord | nu
       content_hash: String(row.content_hash),
     },
     schema: { name: String(row.schema_name), hash: String(row.schema_hash) },
-    strategy: row.strategy === 'fallback' ? 'fallback' : 'model',
+    strategy: 'model' as const,
     model: String(row.model),
     cached: Number(row.cache_hit) === 1,
     calls_spent: Number(row.calls_spent),

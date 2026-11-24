@@ -68,8 +68,8 @@ sequenceDiagram
 | SSRF | Blocks local/private/reserved IPv4 and IPv6, credentials in URL, non-http schemes; resolves hostnames through DNS-over-HTTPS and rejects private answers; re-checks every redirect hop. Optional `ALLOWED_HOSTS` / `BLOCKED_HOSTS`. |
 | robots.txt | Fetches and parses `robots.txt`, honors the longest matching Allow/Disallow rule for `*` or this agent; fails open only when robots.txt is unreachable. |
 | Content cleanup | Removes script/style/nav/header/footer/ads/cookie banners, prefers `<article>`/`<main>`, decodes entities, normalizes whitespace and caps text size. Non-HTML text and JSON are supported too. |
-| Validation | Caller JSON Schema is sanitized into the strict subset OpenRouter accepts; model output is checked with a small recursive validator (no `ajv` — Workers disallow `eval`), with one repair retry and model fallback. |
-| Quota | Page cache (1 h) + result cache (7 d) + atomic 50/day D1 ledger. Only unique page+schema pairs spend model calls. When quota is gone the API still returns a null-only JSON skeleton. |
+| Validation | Caller JSON Schema is sanitized into the strict subset OpenRouter accepts; model output is checked with a small recursive validator (no `ajv` — Workers disallow `eval`), then checked for grounding. One repair retry, then model fallback — never a fabricated result. |
+| Quota | Page cache (1 h) + result cache (7 d) + atomic 50/day D1 ledger. Only unique page+schema pairs spend model calls. When quota is gone the API returns `429 QUOTA_EXHAUSTED` and persists nothing. |
 | Observability | `GET /v1/usage` shows scrapes, cache hits, tokens and global quota; D1 stores every scrape and call. |
 
 ## API
@@ -154,8 +154,18 @@ Example response:
 1. Pages are cached for 1 hour by URL — repeat scrapes do not refetch or re-check robots.
 2. Results are cached for 7 days by `(URL, schema hash, content hash, prompt version)` — unchanged pages never spend a model call.
 3. A D1 ledger reserves each model attempt atomically, including repair retries and fallback models.
-4. If the budget is exhausted, the API returns a schema-shaped JSON skeleton with `strategy: "fallback"` instead of erroring.
+4. If the budget is exhausted, the API returns `429 QUOTA_EXHAUSTED`. It never invents a result or caches one.
 5. Tests stub `fetch` completely, so CI spends zero quota.
+
+## Data-quality contract
+
+An invalid or partial source must never become authoritative:
+
+- A page whose readable text exceeds `options.max_chars` is rejected with `422 CONTENT_TRUNCATED` — it is never partially extracted or cached.
+- Pages with less than 80 characters of usable text are rejected with `415 UNSUPPORTED_CONTENT`.
+- Fields marked `"x-grounded": true` in a schema (e.g. `title`, `author`, `price`, `company`) must appear verbatim in the page text. A schema-valid object containing an invented value is treated as a failed extraction, retried once, then rejected with `502 UPSTREAM_ERROR` if no model produces a grounded result.
+- Only fully validated, grounded results are written to KV or D1. Failures leave no stored record and no cached entry.
+- `robots.txt` rules are honored; SSRF-blocked URLs and disallowed paths never reach an origin.
 
 ## Local development
 
@@ -201,4 +211,5 @@ npm run deploy
 - **Why not `ajv`?** Its JIT compiler uses `new Function`, which Workers disallow. A small validator for the supported subset is safer and auditable.
 - **Why re-check redirects?** A hostname that passes validation can redirect to `127.0.0.1`; every hop is revalidated before fetching.
 - **Why cache by content hash?** A URL can change. Keying on the extracted text means stale results are never served, while unchanged pages still cost nothing.
-- **Why a fallback skeleton?** Scraping tools should be composable; returning a schema-shaped object keeps downstream code simple even when the free tier is exhausted.
+- **Why no fallback skeleton?** A null-only object looks like a successful extraction and can poison downstream data. An explicit error is safer: failed or partial sources never become authoritative.
+- **Why `x-grounded`?** Schema validity alone cannot catch a plausible but invented title or price. Marking verbatim fields lets the Worker verify model output against the source text without a second model call.

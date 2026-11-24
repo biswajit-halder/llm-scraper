@@ -21,7 +21,7 @@ components:
           properties:
             name: { type: string }
             description: { type: string }
-            json_schema: { type: object, description: 'Strict JSON Schema object' }
+            json_schema: { type: object, description: 'Strict JSON Schema object; fields with x-grounded: true must appear verbatim in the page' }
         options:
           type: object
           properties:
@@ -45,7 +45,7 @@ components:
         schema:
           type: object
           properties: { name: { type: string }, hash: { type: string } }
-        strategy: { type: string, enum: [model, fallback] }
+        strategy: { type: string, enum: [model] }
         model: { type: string }
         cached: { type: boolean }
         calls_spent: { type: integer }
@@ -54,7 +54,6 @@ components:
           items:
             type: object
             properties: { model: { type: string }, code: { type: string } }
-        reason: { type: string }
         quota: { type: object }
         usage: { type: object }
     Error:
@@ -63,7 +62,7 @@ components:
         error:
           type: object
           properties:
-            code: { type: string, enum: [VALIDATION_ERROR, UNAUTHORIZED, RATE_LIMITED, SSRF_BLOCKED, ROBOTS_DISALLOWED, FETCH_FAILED, UNSUPPORTED_CONTENT, UPSTREAM_ERROR, NOT_FOUND, INTERNAL] }
+            code: { type: string, enum: [VALIDATION_ERROR, UNAUTHORIZED, RATE_LIMITED, SSRF_BLOCKED, ROBOTS_DISALLOWED, FETCH_FAILED, UNSUPPORTED_CONTENT, CONTENT_TRUNCATED, QUOTA_EXHAUSTED, UPSTREAM_ERROR, NOT_FOUND, INTERNAL] }
             message: { type: string }
             retryable: { type: boolean }
 paths:
@@ -85,7 +84,8 @@ paths:
         '401': { description: Invalid key, schema: { $ref: '#/components/schemas/Error' } }
         '403': { description: robots.txt disallowed, schema: { $ref: '#/components/schemas/Error' } }
         '415': { description: Unsupported content, schema: { $ref: '#/components/schemas/Error' } }
-        '429': { description: Rate limited, schema: { $ref: '#/components/schemas/Error' } }
+        '422': { description: Page exceeded max_chars; partial extraction refused, schema: { $ref: '#/components/schemas/Error' } }
+        '429': { description: Rate limited or free-model quota exhausted, schema: { $ref: '#/components/schemas/Error' } }
         '502': { description: Fetch failed, schema: { $ref: '#/components/schemas/Error' } }
     get:
       summary: Recent scrapes

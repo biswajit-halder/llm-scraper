@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyResult, toStrictJsonSchema, validateJson } from '../../src/lib/jsonSchema';
+import { groundingIssues, toStrictJsonSchema, validateJson } from '../../src/lib/jsonSchema';
 
 const input = {
   type: 'object',
@@ -28,7 +28,17 @@ describe('JSON Schema helpers', () => {
     expect(validateJson({ name: 'x', tags: [], status: null, extra: 1 }, strict)[0]).toContain('unexpected');
   });
 
-  it('builds a null-only skeleton for fallback results', () => {
-    expect(emptyResult(toStrictJsonSchema(input))).toEqual({ name: null, tags: [], status: null });
+  it('rejects invented facts in fields marked as grounded', () => {
+    const strict = toStrictJsonSchema({
+      type: 'object',
+      properties: {
+        title: { type: ['string', 'null'], 'x-grounded': true },
+        summary: { type: ['string', 'null'] },
+      },
+    });
+    const text = 'The council approved twelve electric buses on Tuesday.';
+    expect(groundingIssues({ title: 'Twelve electric buses', summary: 'Transit improves' }, strict, text)).toEqual([]);
+    expect(groundingIssues({ title: 'A brand new stadium', summary: 'Transit improves' }, strict, text)[0]).toContain('not present');
+    expect(groundingIssues({ title: null, summary: 'anything' }, strict, text)).toEqual([]);
   });
 });

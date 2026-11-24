@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractTitle, htmlToText, normalizeText, toReadableContent } from '../../src/lib/text';
-import { UnsupportedContentError } from '../../src/lib/errors';
+import { ContentTruncatedError, UnsupportedContentError } from '../../src/lib/errors';
 
 const HTML = `<html><head><title>My Story</title></head><body>
 <nav>Navigation links here</nav><script>alert('secret')</script>
@@ -28,6 +28,7 @@ describe('HTML to readable text', () => {
   it('rejects pages with too little text or an unsupported type', () => {
     expect(() => toReadableContent(bytes('<p>short</p>'), 'text/html', 1000)).toThrow(UnsupportedContentError);
     expect(() => toReadableContent(bytes('x'.repeat(120)), 'image/png', 1000)).toThrow(UnsupportedContentError);
-    expect(toReadableContent(bytes('a'.repeat(120)), 'text/plain', 50).truncated).toBe(true);
+    expect(() => toReadableContent(bytes('a'.repeat(120)), 'text/plain', 50)).toThrow(ContentTruncatedError);
+    expect(toReadableContent(bytes('a'.repeat(120)), 'text/plain', 200).truncated).toBe(false);
   });
 });

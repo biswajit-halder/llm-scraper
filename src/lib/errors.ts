@@ -6,6 +6,8 @@ export type ErrorCode =
   | 'ROBOTS_DISALLOWED'
   | 'FETCH_FAILED'
   | 'UNSUPPORTED_CONTENT'
+  | 'CONTENT_TRUNCATED'
+  | 'QUOTA_EXHAUSTED'
   | 'UPSTREAM_ERROR'
   | 'NOT_FOUND'
   | 'INTERNAL';
@@ -74,6 +76,31 @@ export class FetchFailedError extends AppError {
 export class UnsupportedContentError extends AppError {
   constructor(message: string) {
     super('UNSUPPORTED_CONTENT', 415, message);
+  }
+}
+
+export class ContentTruncatedError extends AppError {
+  constructor(maxChars: number) {
+    super(
+      'CONTENT_TRUNCATED',
+      422,
+      `The page exceeded ${maxChars} characters. Refusing to extract from a partial page; raise options.max_chars.`,
+      false,
+      { maxChars },
+    );
+  }
+}
+
+export class QuotaExhaustedError extends AppError {
+  constructor(retryAfter = 86_400) {
+    super(
+      'QUOTA_EXHAUSTED',
+      429,
+      'Shared OpenRouter free-model daily quota exhausted. No result was persisted.',
+      true,
+      undefined,
+      retryAfter,
+    );
   }
 }
 

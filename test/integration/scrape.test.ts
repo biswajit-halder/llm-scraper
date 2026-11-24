@@ -82,32 +82,65 @@ describe('POST /v1/scrape', () => {
     expect(response.status).toBe(201);
     expect(body.strategy).toBe('model');
     expect(body.data.product_name).toBe('Widget');
-    expect(body.failures[0].code).toBe('invalid_json');
+    expect(body.failures[0].code).toBe('invalid_or_ungrounded_json');
   });
 
-  it('returns a JSON skeleton when every model fails', async () => {
+  it('fails explicitly and stores nothing when every model fails', async () => {
     const env = makeEnv();
     const key = await createAuthKey(env);
     stubFetch({ llm: [{ status: 500 }] });
     const request = post('/v1/scrape', { url: TEST_URL, schema_id: 'article' }, key);
     const response = await app.request(request.path, request.init, env);
     const body = (await response.json()) as Record<string, any>;
-    expect(response.status).toBe(201);
-    expect(body.strategy).toBe('fallback');
-    expect(body.reason).toBe('all_models_failed');
-    expect(body.data).toHaveProperty('title', null);
-    expect(body.data.topics).toEqual([]);
+    expect(response.status).toBe(502);
+    expect(body.error.code).toBe('UPSTREAM_ERROR');
+
+    const history = await app.request('/v1/scrape', { headers: { authorization: `Bearer ${key}` } }, env);
+    expect(((await history.json()) as { items: unknown[] }).items).toEqual([]);
   });
 
-  it('skips model calls when the daily quota is exhausted', async () => {
+  it('returns 429 and never calls a model when the daily quota is exhausted', async () => {
     const env = makeEnv({ DAILY_REQUEST_LIMIT: '0' });
     const key = await createAuthKey(env);
     const fetchMock = stubFetch({ llm: ['{}'] });
     const request = post('/v1/scrape', { url: TEST_URL, schema_id: 'article' }, key);
     const response = await app.request(request.path, request.init, env);
     const body = (await response.json()) as Record<string, any>;
-    expect(body.strategy).toBe('fallback');
-    expect(body.reason).toBe('quota_exhausted');
+    expect(response.status).toBe(429);
+    expect(body.error.code).toBe('QUOTA_EXHAUSTED');
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('openrouter.ai/api/v1/chat'))).toBe(false);
+  });
+
+  it('refuses to extract from a truncated page', async () => {
+    const env = makeEnv();
+    const key = await createAuthKey(env);
+    const longHtml = `<html><head><title>Long Article</title></head><body><article>${'The council approved twelve electric buses on Tuesday. '.repeat(30)}</article></body></html>`;
+    stubFetch({ html: longHtml, llm: [VALID_ARTICLE] });
+    const request = post('/v1/scrape', {
+      url: TEST_URL, schema_id: 'article', options: { max_chars: 1000 },
+    }, key);
+    const response = await app.request(request.path, request.init, env);
+    const body = (await response.json()) as Record<string, any>;
+    expect(response.status).toBe(422);
+    expect(body.error.code).toBe('CONTENT_TRUNCATED');
+  });
+
+  it('rejects invented facts even when the JSON is schema-valid', async () => {
+    const env = makeEnv();
+    const key = await createAuthKey(env);
+    const invented = JSON.stringify({
+      title: 'A brand new stadium',
+      author: null,
+      published_at: null,
+      summary: 'Transit improves.',
+      topics: [],
+      tone: 'neutral',
+    });
+    stubFetch({ llm: [invented] });
+    const request = post('/v1/scrape', { url: TEST_URL, schema_id: 'article' }, key);
+    const response = await app.request(request.path, request.init, env);
+    const body = (await response.json()) as Record<string, any>;
+    expect(response.status).toBe(502);
+    expect(body.error.code).toBe('UPSTREAM_ERROR');
   });
 });

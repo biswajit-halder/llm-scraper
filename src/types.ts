@@ -74,14 +74,13 @@ export interface PageContent {
 
 export interface ExtractionOutcome {
   data: JsonObject;
-  strategy: 'model' | 'fallback';
+  strategy: 'model';
   model: string;
   callsSpent: number;
   tokensIn: number;
   tokensOut: number;
   latencyMs: number;
   failures: Array<{ model: string; code: string }>;
-  reason?: string;
 }
 
 export interface ScrapeResult {
@@ -95,7 +94,7 @@ export interface ScrapeResult {
     content_hash: string;
   };
   schema: { name: string; hash: string };
-  strategy: 'model' | 'fallback';
+  strategy: 'model';
   model: string;
   cached: boolean;
   calls_spent: number;

@@ -6,7 +6,8 @@ const SYSTEM_BASE = [
   'You are a precise web-scraping extraction engine.',
   'Return ONLY a single JSON object that conforms exactly to the supplied JSON schema.',
   'Never output markdown fences or commentary.',
-  'Use only facts supported by the page text. Use null for unknown fields; never guess.',
+  'Copy values that are marked as grounded verbatim from the page. Never guess or infer them.',
+  'Use null for unknown fields; never invent a value to fill a field.',
   'Prefer the page title and main article/product content over navigation text.',
 ].join('\n');
 
@@ -24,10 +25,10 @@ const specs: SchemaSpec[] = [
   make('article', 'Article', 'Title, author, date, summary, topics and tone of an article.', {
     type: 'object',
     properties: {
-      title: { type: ['string', 'null'] },
-      author: { type: ['string', 'null'] },
-      published_at: { type: ['string', 'null'], description: 'Date as written on the page' },
-      summary: { type: ['string', 'null'], description: 'Two sentence summary' },
+      title: { type: ['string', 'null'], 'x-grounded': true },
+      author: { type: ['string', 'null'], 'x-grounded': true },
+      published_at: { type: ['string', 'null'], description: 'Date exactly as written on the page', 'x-grounded': true },
+      summary: { type: ['string', 'null'], description: 'Two sentence summary derived from the text' },
       topics: { type: 'array', items: { type: 'string' } },
       tone: { type: ['string', 'null'], enum: ['positive', 'neutral', 'negative', 'unknown'] },
     },
@@ -35,9 +36,9 @@ const specs: SchemaSpec[] = [
   make('product', 'Product', 'Name, brand, price, rating, availability and key features of a product page.', {
     type: 'object',
     properties: {
-      name: { type: ['string', 'null'] },
-      brand: { type: ['string', 'null'] },
-      price: { type: ['string', 'null'], description: 'Price including currency symbol as shown' },
+      name: { type: ['string', 'null'], 'x-grounded': true },
+      brand: { type: ['string', 'null'], 'x-grounded': true },
+      price: { type: ['string', 'null'], description: 'Price including currency symbol as shown', 'x-grounded': true },
       rating: { type: ['number', 'null'] },
       availability: { type: ['string', 'null'], enum: ['in_stock', 'out_of_stock', 'preorder', 'unknown'] },
       features: { type: 'array', items: { type: 'string' } },
@@ -46,11 +47,11 @@ const specs: SchemaSpec[] = [
   make('job_posting', 'Job posting', 'Role, company, location, employment type, salary and requirements.', {
     type: 'object',
     properties: {
-      title: { type: ['string', 'null'] },
-      company: { type: ['string', 'null'] },
-      location: { type: ['string', 'null'] },
+      title: { type: ['string', 'null'], 'x-grounded': true },
+      company: { type: ['string', 'null'], 'x-grounded': true },
+      location: { type: ['string', 'null'], 'x-grounded': true },
       employment_type: { type: ['string', 'null'], enum: ['full_time', 'part_time', 'contract', 'internship', 'unknown'] },
-      salary: { type: ['string', 'null'] },
+      salary: { type: ['string', 'null'], 'x-grounded': true },
       requirements: { type: 'array', items: { type: 'string' } },
     },
   }, 'Classify employment_type into the provided enum; use "unknown" when the page does not say.'),

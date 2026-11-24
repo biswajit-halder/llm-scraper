@@ -1,4 +1,4 @@
-import { UnsupportedContentError } from './errors';
+import { ContentTruncatedError, UnsupportedContentError } from './errors';
 
 const ENTITIES: Record<string, string> = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
@@ -84,10 +84,8 @@ export function toReadableContent(
     throw new UnsupportedContentError(`Unsupported content type: ${contentType || 'unknown'}`);
   }
 
+  // A truncated-but-successful fetch must never become an authoritative result.
+  if (text.length > maxChars) throw new ContentTruncatedError(maxChars);
   if (text.length < 80) throw new UnsupportedContentError('The page has too little usable text');
-  return {
-    text: text.slice(0, maxChars),
-    title,
-    truncated: text.length > maxChars,
-  };
+  return { text, title, truncated: false };
 }

@@ -24,6 +24,7 @@ function sanitize(node: unknown, depth: number): JsonObject {
 
   if (typeof source.type === 'string' || Array.isArray(source.type)) out.type = source.type;
   if (typeof source.description === 'string') out.description = source.description.slice(0, 500);
+  if (typeof source['x-grounded'] === 'boolean') out['x-grounded'] = source['x-grounded'];
   if (Array.isArray(source.enum)) out.enum = source.enum.slice(0, 50);
   if (typeof source.minimum === 'number') out.minimum = source.minimum;
   if (typeof source.maximum === 'number') out.maximum = source.maximum;
@@ -102,13 +103,44 @@ export function validateJson(value: unknown, schema: JsonObject, path = '$'): st
   return issues;
 }
 
-/** Skeleton result used when every model fails: every field present, all null. */
-export function emptyResult(schema: JsonObject): JsonObject {
-  const properties = (schema.properties ?? {}) as JsonObject;
-  return Object.fromEntries(
-    Object.keys(properties).map((key) => {
-      const child = properties[key] as JsonObject;
-      return [key, child.type === 'array' ? [] : null];
-    }),
-  );
+/**
+ * Reject facts the model invented. Only fields explicitly marked with
+ * `x-grounded: true` are checked, because summaries and topic tags are derived
+ * rather than copied. This keeps "invalid" from becoming "authoritative".
+ */
+export function groundingIssues(
+  value: unknown,
+  schema: JsonObject,
+  sourceText: string,
+  path = '$',
+): string[] {
+  const haystack = sourceText.toLowerCase();
+  const issues: string[] = [];
+
+  if (schema['x-grounded'] === true && value !== null && value !== undefined) {
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      const needle = String(value).trim().toLowerCase();
+      if (needle.length > 1 && !haystack.includes(needle)) {
+        issues.push(`${path}: "${String(value)}" is not present in the page text`);
+      }
+    }
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const properties = (schema.properties ?? {}) as JsonObject;
+    if (Array.isArray(value)) {
+      const itemSchema = schema.items as JsonObject | undefined;
+      if (itemSchema) {
+        value.forEach((item, index) => {
+          issues.push(...groundingIssues(item, itemSchema, sourceText, `${path}[${index}]`));
+        });
+      }
+    } else {
+      for (const [key, nested] of Object.entries(value as JsonObject)) {
+        const child = properties[key] as JsonObject | undefined;
+        if (child) issues.push(...groundingIssues(nested, child, sourceText, `${path}.${key}`));
+      }
+    }
+  }
+  return issues;
 }
